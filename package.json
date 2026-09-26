@@ -14,9 +14,9 @@
     "desktop": "npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
     "lint": "eslint .",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux",
-    "dist:mac": "npm run build && electron-builder --mac"
+    "dist:win": "npm run build && electron-builder --win -p never",
+    "dist:linux": "npm run build && electron-builder --linux -p never",
+    "dist:mac": "npm run build && electron-builder --mac -p never"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
