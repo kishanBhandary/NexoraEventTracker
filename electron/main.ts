@@ -28,15 +28,24 @@ async function waitForServer(): Promise<void> {
       // keep retrying until the frontend server is ready
     }
 
-    const nextCommand = process.env.ELECTRON_IS_DEV === "true" ? ["next", "dev", "-p", "3001"] : ["next", "start", "-p", "3001"];
-    const nextBinary = process.platform === "win32" ? "npx.cmd" : "npx";
+    const isDev = process.env.ELECTRON_IS_DEV === "true";
+    let nextBinary = process.platform === "win32" ? "npx.cmd" : "npx";
+    let nextCommand = isDev ? ["next", "dev", "-p", "3001"] : ["next", "start", "-p", "3001"];
+    let spawnEnv = { ...process.env };
+
+    if (!isDev) {
+      nextBinary = process.execPath;
+      const nextCli = path.join(appRoot, "node_modules", "next", "dist", "bin", "next");
+      nextCommand = [nextCli, "start", "-p", "3001"];
+      spawnEnv.ELECTRON_RUN_AS_NODE = "1";
+    }
 
     if (attempt === 0 && !process.env.ELECTRON_SERVER_STARTED) {
       process.env.ELECTRON_SERVER_STARTED = "true";
       spawn(nextBinary, nextCommand, {
         cwd: appRoot,
         stdio: "ignore",
-        env: { ...process.env },
+        env: spawnEnv,
       });
     }
 
