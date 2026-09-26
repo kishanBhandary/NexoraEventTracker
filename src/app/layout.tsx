@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Student Event & Achievement Tracker",
+  title: "Event Tracker",
   description: "Offline HOD dashboard for student events and achievements",
 };
 

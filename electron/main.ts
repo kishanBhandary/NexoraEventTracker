@@ -50,6 +50,7 @@ function createWindow() {
     height: 1000,
     minWidth: 1200,
     minHeight: 800,
+    title: "Event Tracker",
     backgroundColor: "#ffffff",
     autoHideMenuBar: true,
     webPreferences: {

@@ -1,4 +1,4 @@
-import { ChevronDown, FileSpreadsheet, GraduationCap, Settings, Users } from "lucide-react";
+import { ChevronDown, FileSpreadsheet, Settings, Users } from "lucide-react";
 
 const navItems = [
   { label: "Students", value: "students", icon: Users },
@@ -17,12 +17,11 @@ export function Sidebar({ activeTab, onSelect }: { activeTab: string; onSelect: 
   return (
     <aside className="flex w-[300px] flex-col border-r border-[#E4E7EC] bg-[#F7F7F8] px-4 py-5">
       <div className="mb-8 flex items-center gap-3 px-2 pt-1">
-        <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#111111] text-white shadow-[0_8px_20px_rgba(17,17,17,0.12)]">
-          <GraduationCap className="h-5 w-5" />
+        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-[12px] shadow-[0_8px_20px_rgba(17,17,17,0.12)]">
+          <img src="/eventlogo-removebg-preview.png" alt="Logo" className="h-full w-full object-cover" />
         </div>
         <div className="leading-[1.15]">
-          <div className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#111111]">Student Event</div>
-          <div className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#111111]">Achievement Tracker</div>
+          <div className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#111111]">Event Tracker </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 {
-  "name": "student-event-tracker",
+  "name": "event-tracker",
   "version": "0.1.0",
   "private": true,
   "main": "dist-electron/main.js",
@@ -10,14 +10,13 @@
     "build": "next build && npm run build:electron",
     "build:electron": "tsc -p tsconfig.electron.json",
     "start": "next start -p 3001",
-    "electron": "cd /home/kishan/Documents/Hod/student-event-tracker && npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
-    "desktop": "cd /home/kishan/Documents/Hod/student-event-tracker && npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
+    "electron": "npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
+    "desktop": "npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
     "lint": "eslint .",
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "electron": "^44.4.5",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
     "react": "19.2.8",
@@ -32,6 +31,7 @@
     "@types/react-dom": "^19",
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
+    "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
@@ -39,5 +39,31 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "wait-on": "^9.1.0"
-  }
+  },
+  "productName": "Event Tracker",
+  "build": {
+    "appId": "com.ajiet.event-tracker",
+    "productName": "Event Tracker",
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "rpm"
+      ]
+    }
+  },
+  "author": {
+    "name": "AJIET",
+    "email": "contact@ajiet.edu.in"
+  },
+  "description": "Event Tracker Dashboard"
 }

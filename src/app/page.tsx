@@ -34,14 +34,14 @@ type StudentProfileDraft = {
   yearOfPassing: string;
 };
 
-const sectionTitles: Record<string, { title: string; subtitle: string; button: string }> = {
-  students: { title: "All Students", subtitle: "Showing 1–8 of 8 students", button: "+ Import Concern Form" },
-  events: { title: "All Events", subtitle: "Showing 1–8 of 8 events", button: "+ Add Event" },
+const sectionTitles: Record<string, { title: string; subtitle: string; button?: string }> = {
+  students: { title: "All Students", subtitle: "Showing 1–8 of 8 students", button: "Import Concern Form" },
+  events: { title: "All Events", subtitle: "Showing 1–8 of 8 events", button: "Add Event" },
   import: { title: "Data Import", subtitle: "Import student event information into the local database", button: "Upload Excel" },
   "import-form1": { title: "Form1 Concern Form", subtitle: "Upload and process concern form submissions", button: "Import Concern Form" },
   "import-form2": { title: "Form2 Participation", subtitle: "Upload participation records and achievement data", button: "Import Participation Form" },
-  reports: { title: "Reports", subtitle: "Generate department and student achievement summaries", button: "+ Export Report" },
-  settings: { title: "Settings", subtitle: "Configure application and storage preferences", button: "Save Settings" },
+  reports: { title: "Reports", subtitle: "Generate department and student achievement summaries", button: "Export Report" },
+  settings: { title: "Settings", subtitle: "Configure application and storage preferences" },
 };
 
 const normalizeBranch = (value: string) => {
@@ -675,15 +675,17 @@ export default function HomePage() {
               <p className="mt-2 text-[15px] text-[#667085]">{currentSection.subtitle}</p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("import-form1")}
-              className="inline-flex items-center gap-2 rounded-[12px] bg-[#DC2626] px-5 py-3 text-[15px] font-semibold text-white shadow-[0_12px_22px_rgba(220,38,38,0.18)] transition hover:bg-[#B91C1C]"
-            >
-              <Plus className="h-4 w-4" />
-              <span>{currentSection.button}</span>
-              <ChevronDown className="h-4 w-4" />
-            </button>
+            {currentSection.button && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("import-form1")}
+                className="inline-flex items-center gap-2 rounded-[12px] bg-[#DC2626] px-5 py-3 text-[15px] font-semibold text-white shadow-[0_12px_22px_rgba(220,38,38,0.18)] transition hover:bg-[#B91C1C]"
+              >
+                <Plus className="h-4 w-4" />
+                <span>{currentSection.button}</span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {activeTab === "students" && renderStudents()}
