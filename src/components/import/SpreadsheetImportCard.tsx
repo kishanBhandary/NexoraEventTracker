@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Eye, FileSpreadsheet, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Eye, FileSpreadsheet, Trash2, Upload, Cloud, X, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { getElectronAPI } from "@/lib/electron";
@@ -63,6 +63,7 @@ export function SpreadsheetImportCard({
   const [message, setMessage] = useState("");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingImport, setLoadingImport] = useState(false);
+      const [loadingDrive, setLoadingDrive] = useState(false);
 
   const api = useMemo(() => getElectronAPI(), []);
 
@@ -105,6 +106,46 @@ export function SpreadsheetImportCard({
     }
 
     await loadPreview(chosenFile);
+  };
+
+    const openDrivePicker = async () => {
+    if (!api?.drive) {
+      setMessage("Drive API is not available.");
+      return;
+    }
+    setLoadingDrive(true);
+    try {
+      const authed = await api.drive.auth();
+      if (!authed) {
+        setMessage("Google Drive authentication failed.");
+        return;
+      }
+      const picked = await api.drive.pick();
+      if (picked && picked.id) {
+        await downloadDriveFile(picked.id, picked.name || "Google_Drive_File.xlsx");
+      }
+    } catch (e: any) {
+      setMessage(e.message || "Error accessing Google Drive.");
+    } finally {
+      setLoadingDrive(false);
+    }
+  };
+
+  const downloadDriveFile = async (fileId: string, name: string) => {
+    if (!api?.drive) return;
+    setLoadingDrive(true);
+    try {
+      const tempPath = await api.drive.download(fileId, name);
+      if (tempPath) {
+        await loadPreview(tempPath);
+      } else {
+        setMessage("Failed to download file from Google Drive.");
+      }
+    } catch {
+      setMessage("Error downloading file.");
+    } finally {
+      setLoadingDrive(false);
+    }
   };
 
   const importFile = async () => {
@@ -156,22 +197,38 @@ export function SpreadsheetImportCard({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <button
-          type="button"
-          onClick={() => void selectFile()}
-          className="group flex min-h-[200px] flex-col items-center justify-center rounded-[20px] border border-dashed border-[#FCA5A5] bg-[#FFF5F5] px-6 py-8 text-center transition hover:border-[#DC2626] hover:bg-[#FFF0F0]"
-        >
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-[0_8px_18px_rgba(220,38,38,0.08)]">
-            <Upload className="h-7 w-7 text-[#DC2626]" />
-          </div>
-          <div className="text-[18px] font-semibold tracking-[-0.03em] text-[#111111]">Drop Excel file here</div>
-          <div className="mt-1 text-[14px] text-[#475467]">or click to browse</div>
-          <div className="mt-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#667085]">
-            <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.xlsx</span>
-            <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.xls</span>
-            <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.csv</span>
-          </div>
-        </button>
+        <div className="flex flex-col gap-4">
+          <button
+            type="button"
+            onClick={() => void selectFile()}
+            className="group flex flex-1 flex-col items-center justify-center rounded-[20px] border border-dashed border-[#FCA5A5] bg-[#FFF5F5] px-6 py-8 text-center transition hover:border-[#DC2626] hover:bg-[#FFF0F0]"
+          >
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-[0_8px_18px_rgba(220,38,38,0.08)]">
+              <Upload className="h-7 w-7 text-[#DC2626]" />
+            </div>
+            <div className="text-[18px] font-semibold tracking-[-0.03em] text-[#111111]">Browse Local File</div>
+            <div className="mt-1 text-[14px] text-[#475467]">from your computer</div>
+            <div className="mt-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#667085]">
+              <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.xlsx</span>
+              <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.xls</span>
+              <span className="rounded-full border border-[#E4E7EC] bg-white px-2.5 py-1">.csv</span>
+            </div>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => void openDrivePicker()}
+            disabled={loadingDrive}
+            className="group flex flex-col items-center justify-center rounded-[20px] border border-dashed border-[#E4E7EC] bg-[#FCFCFD] px-6 py-6 text-center transition hover:border-[#111111] hover:bg-[#F9FAFB] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm border border-[#E4E7EC]">
+              <Cloud className="h-5 w-5 text-[#111111]" />
+            </div>
+            <div className="text-[15px] font-semibold tracking-[-0.03em] text-[#111111]">
+              {loadingDrive ? "Connecting..." : "Import from Google Drive"}
+            </div>
+          </button>
+        </div>
 
         <div className="flex flex-col gap-4 rounded-[20px] border border-[#E4E7EC] bg-[#FCFCFD] p-4">
           {filePath ? (
@@ -283,6 +340,7 @@ export function SpreadsheetImportCard({
           {message}
         </div>
       )}
-    </section>
+
+      </section>
   );
 }

@@ -34,6 +34,11 @@ const api = {
     events: () => ipcRenderer.invoke("report:events"),
     departments: () => ipcRenderer.invoke("report:departments"),
   },
+  drive: {
+    auth: () => ipcRenderer.invoke("drive:auth"),
+    pick: () => ipcRenderer.invoke("drive:pick"),
+    download: (fileId: string, fileName: string) => ipcRenderer.invoke("drive:download", fileId, fileName),
+  },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", api);

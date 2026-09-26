@@ -5,6 +5,7 @@ declare global {
         getByUsn: (usn: string) => Promise<any>;
         list: () => Promise<any>;
         upsert: (student: Record<string, string>) => Promise<any>;
+        delete: (usn: string) => Promise<any>;
       };
       event: {
         getByNameAndDate: (eventName: string, eventDate: string) => Promise<any>;
@@ -25,12 +26,18 @@ declare global {
         backup: () => Promise<any>;
         restore: (filePath: string) => Promise<any>;
         getLocation: () => Promise<any>;
+        clearData: () => Promise<any>;
       };
       report: {
         summary: () => Promise<any>;
         students: () => Promise<any>;
         events: () => Promise<any>;
         departments: () => Promise<any>;
+      };
+      drive?: {
+        auth: () => Promise<boolean>;
+        pick: () => Promise<{id: string, name: string} | null>;
+        download: (fileId: string, fileName: string) => Promise<string | null>;
       };
     };
   }

@@ -7,6 +7,7 @@ import "./ipc/student-ipc.js";
 import "./ipc/event-ipc.js";
 import "./ipc/import-ipc.js";
 import "./ipc/report-ipc.js";
+import "./ipc/drive-ipc.js";
 
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disable-gpu");
