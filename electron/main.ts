@@ -60,6 +60,7 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 800,
     title: "Event Tracker",
+    icon: path.join(__dirname, "../public/eventlogo-removebg-preview.png"),
     backgroundColor: "#ffffff",
     autoHideMenuBar: true,
     webPreferences: {
