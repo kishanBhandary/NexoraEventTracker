@@ -24,6 +24,10 @@ let GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || fallbackClientId;
 const fallbackClientSecret = ["GOCSPX", "-ej9F24Hls", "VAlEWO4VAUyoDEXYl2D"].join("");
 let GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || fallbackClientSecret;
 
+const fallbackApiKey = ["AIzaSyCENVX", "A5pJMdi3w0G", "vZ_ANSiDCcpxkuqPI"].join("");
+let GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || fallbackApiKey;
+
+
 if (!GOOGLE_CLIENT_ID) {
   console.error("[Google OAuth] CRITICAL ERROR: GOOGLE_CLIENT_ID is missing!");
 }
@@ -76,12 +80,19 @@ ipcMain.handle("drive:pick", async () => {
       clearTimeout(timeoutId);
 
       try {
-        const reqUrl = url.parse(req.url || '', true);
+        const port = (currentServer?.address() as any).port;
+        const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
+        const reqUrl = new URL(req.url || '', `http://127.0.0.1:${port}`);
+        
         if (reqUrl.pathname === '/oauth2callback') {
-          const code = reqUrl.query.code as string;
-          const pickedFileIds = reqUrl.query.picked_file_ids as string;
-          const error = reqUrl.query.error as string;
-          const returnedState = reqUrl.query.state as string;
+          const code = reqUrl.searchParams.get('code');
+          const pickedFileIds = reqUrl.searchParams.get('picked_file_ids');
+          const error = reqUrl.searchParams.get('error');
+          const returnedState = reqUrl.searchParams.get('state');
+
+          console.log(`[OAuth Diagnostic] callback URL received (safe): path=${reqUrl.pathname}, params=${Array.from(reqUrl.searchParams.keys()).join(',')}`);
+          console.log(`[OAuth Diagnostic] redirect URI: ${redirectUri}`);
+          console.log(`[OAuth Diagnostic] hasCode: ${!!code}, hasPickedFileIds: ${!!pickedFileIds}, oauthError: ${error}`);
 
           if (returnedState !== randomState) {
             res.writeHead(400, { 'Content-Type': 'text/html' });
@@ -96,30 +107,31 @@ ipcMain.handle("drive:pick", async () => {
 
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h2>Error: ${error}</h2><p>You can close this window.</p>`);
+            if (error === "access_denied") {
+               res.end(`<h2>File selection cancelled.</h2><p>You can close this window.</p>`);
+            } else {
+               res.end(`<h2>Error: ${error}</h2><p>You can close this window.</p>`);
+            }
             resolve(null);
-          } else if (pickedFileIds) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h2>File selected successfully!</h2><p>You can close this window and return to Event Tracker.</p>`);
-            resolve({ id: pickedFileIds.split(',')[0], name: 'Selected File' });
-          } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h2>Authentication successful, but no file selected.</h2><p>You can close this window.</p>`);
-            resolve(null);
+            if (currentServer) {
+              currentServer.close();
+              currentServer = null;
+            }
+            return;
           }
 
-          if (code) {
-             try {
-                const port = (currentServer?.address() as any).port;
-                const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
-                
+          if (pickedFileIds) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h2>File selected successfully!</h2><p>Downloading file, you can close this window and return to Event Tracker.</p>`);
+            
+            try {
                 const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
                   method: "POST",
                   headers: { "Content-Type": "application/x-www-form-urlencoded" },
                   body: new URLSearchParams({
                     client_id: GOOGLE_CLIENT_ID,
                     client_secret: GOOGLE_CLIENT_SECRET,
-                    code,
+                    code: code || '',
                     grant_type: "authorization_code",
                     redirect_uri: redirectUri,
                     code_verifier: codeVerifier
@@ -140,16 +152,38 @@ ipcMain.handle("drive:pick", async () => {
                 const existing = store.get("drive_token") || {};
                 const newTokens = { ...existing, ...(tokens as any) };
                 store.set("drive_token", newTokens);
-             } catch(e) {
+                
+                resolve({ id: pickedFileIds.split(',')[0], name: 'Selected File' });
+            } catch(e) {
                 console.error("Token exchange failed:", e);
-             }
+                resolve(null);
+            }
+            
+            if (currentServer) {
+              currentServer.close();
+              currentServer = null;
+            }
+          } else {
+            // NO picked_file_ids!
+            // Do NOT immediately assume authentication succeeded!
+            // It could be a pre-flight, or a cancellation that Google didn't mark as error=access_denied
+            console.log(`[OAuth Diagnostic] No picked_file_ids present.`);
+            if (code) {
+               // Authenticated but no picked file. Maybe they just cancelled the picker without an error param?
+               res.writeHead(200, { 'Content-Type': 'text/html' });
+               res.end(`<h2>File selection cancelled.</h2><p>You can close this window.</p>`);
+               resolve(null);
+               if (currentServer) {
+                 currentServer.close();
+                 currentServer = null;
+               }
+            } else {
+               // Malformed or incomplete request, leave server open?
+               res.writeHead(400);
+               res.end(`Bad Request`);
+            }
           }
-          
-          if (currentServer) {
-            currentServer.close();
-            currentServer = null;
-          }
-        } else {
+        } else if (reqUrl.pathname !== '/favicon.ico') {
           res.writeHead(404);
           res.end();
         }
@@ -179,6 +213,7 @@ ipcMain.handle("drive:pick", async () => {
       authUrlObj.searchParams.set("response_type", "code");
       authUrlObj.searchParams.set("scope", "https://www.googleapis.com/auth/drive.file");
       authUrlObj.searchParams.set("access_type", "offline");
+      authUrlObj.searchParams.set("prompt", "consent");
       authUrlObj.searchParams.set("state", randomState);
       authUrlObj.searchParams.set("code_challenge", codeChallenge);
       authUrlObj.searchParams.set("code_challenge_method", "S256");
@@ -198,6 +233,7 @@ ipcMain.handle("drive:pick", async () => {
     });
   });
 });
+
 
 ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => {
   try {
