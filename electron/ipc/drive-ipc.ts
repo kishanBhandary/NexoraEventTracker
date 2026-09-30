@@ -3,6 +3,8 @@ import { google } from "googleapis";
 import Store from "electron-store";
 import path from "path";
 import os from "os";
+import { spawn } from "child_process";
+
 import fs, { createWriteStream } from "fs";
 import dotenv from "dotenv";
 import http from 'http';
@@ -37,6 +39,28 @@ if (!GOOGLE_CLIENT_ID) {
 }
 
 const store = new Store() as any;
+
+
+function safeOpenExternal(targetUrl: string) {
+  if (process.platform === 'linux' && process.env.APPIMAGE) {
+    const env = { ...process.env };
+    delete env.APPIMAGE;
+    delete env.APPDIR;
+    delete env.LD_LIBRARY_PATH;
+    if (process.env.LD_LIBRARY_PATH_ORIG) {
+      env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH_ORIG;
+    }
+    
+    const child = spawn('xdg-open', [targetUrl], { env, detached: true, stdio: 'ignore' });
+    child.unref();
+    child.on('error', (err) => {
+      console.error("Failed to spawn xdg-open:", err);
+      shell.openExternal(targetUrl);
+    });
+  } else {
+    shell.openExternal(targetUrl);
+  }
+}
 
 let currentServer: http.Server | null = null;
 
@@ -159,7 +183,7 @@ currentServer.listen(0, '127.0.0.1', () => {
       console.log(`redirectUri: ${redirectUri}`);
       console.log(`scope: https://www.googleapis.com/auth/drive.file`);
       
-      shell.openExternal(finalUrl);
+      safeOpenExternal(finalUrl);
     }).on('error', (err: any) => {
       console.error('Callback server error', err);
       resolve(null);
