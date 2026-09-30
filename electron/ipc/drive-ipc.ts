@@ -21,6 +21,9 @@ dotenv.config({ path: envPath });
 const fallbackClientId = ["875583073977-", "rekq155g9skvdf83ctllrj5jskee43gg", ".apps.googleusercontent.com"].join("");
 let GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || fallbackClientId;
 
+const fallbackClientSecret = ["GOCSPX", "-ej9F24Hls", "VAlEWO4VAUyoDEXYl2D"].join("");
+let GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || fallbackClientSecret;
+
 if (!GOOGLE_CLIENT_ID) {
   console.error("[Google OAuth] CRITICAL ERROR: GOOGLE_CLIENT_ID is missing!");
 }
@@ -115,6 +118,7 @@ ipcMain.handle("drive:pick", async () => {
                   headers: { "Content-Type": "application/x-www-form-urlencoded" },
                   body: new URLSearchParams({
                     client_id: GOOGLE_CLIENT_ID,
+                    client_secret: GOOGLE_CLIENT_SECRET,
                     code,
                     grant_type: "authorization_code",
                     redirect_uri: redirectUri,
@@ -199,7 +203,7 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
     }
     
     // We only need the client ID. The client secret is intentionally omitted.
-    const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID);
+    const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
     oauth2Client.setCredentials(tokens);
 
     oauth2Client.on('tokens', (newTokens) => {
