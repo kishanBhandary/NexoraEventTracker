@@ -1,4 +1,4 @@
-# 📊 Nexora Event Tracker
+#  Nexora Event Tracker
 
 **Nexora Event Tracker** is a powerful, cross-platform desktop application designed to streamline event management, spreadsheet processing, and local database tracking. Built with modern web technologies and packaged via Electron, it delivers a secure and responsive desktop experience.
 
