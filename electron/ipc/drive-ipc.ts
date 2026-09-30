@@ -1,218 +1,157 @@
-import { ipcMain, BrowserWindow, shell } from "electron";
+import { ipcMain, BrowserWindow, shell, app } from "electron";
 import { google } from "googleapis";
 import Store from "electron-store";
 import path from "path";
 import os from "os";
-import fs from "fs";
-import { createWriteStream } from "fs";
+import fs, { createWriteStream } from "fs";
 import dotenv from "dotenv";
-
-import { app } from "electron";
+import http from 'http';
+import url from 'url';
+import crypto from "crypto";
 
 const envPath = app.isPackaged 
   ? path.join(process.resourcesPath, '.env')
-  : path.join(app.getAppPath(), '.env');
+  : path.resolve(__dirname, '../../.env');
 
-dotenv.config({ path: envPath });
+const envResult = dotenv.config({ path: envPath });
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+if (!GOOGLE_CLIENT_ID) {
+  console.error("[Google OAuth] CRITICAL ERROR: GOOGLE_CLIENT_ID is missing!");
+  console.error("Attempted to load .env from:", envPath);
+  if (envResult.error) {
+    console.error("dotenv error:", envResult.error);
+  }
+}
 
 const store = new Store() as any;
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || "urn:ietf:wg:oauth:2.0:oob"
-);
+let currentServer: http.Server | null = null;
 
-// We will use a standard out-of-band flow or a custom local server for OAuth
-// Actually, urn:ietf:wg:oauth:2.0:oob is deprecated for desktop apps.
-// Better to use a custom loopback server. Let's do a simple one.
-import http from 'http';
-import url from 'url';
-
-let authServer: http.Server | null = null;
-
-async function authenticate(): Promise<void> {
-  const token = store.get("drive_token");
-  if (token) {
-    oauth2Client.setCredentials(token as any);
-    return;
-  }
-
-  return new Promise((resolve, reject) => {
-    // start local server
-    const redirectUri = 'http://localhost:3002/oauth2callback';
-    const tempClient = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri
-    );
-    authServer = http.createServer(async (req, res) => {
-      try {
-        if (req.url?.indexOf('/oauth2callback') !== -1) {
-          const qs = new url.URL(req.url || '', 'http://localhost:3002').searchParams;
-          const code = qs.get('code');
-          res.end('Authentication successful! You can close this window and return to the app.');
-          authServer?.close();
-          authServer = null;
-          
-          if (code) {
-            const { tokens } = await tempClient.getToken(code);
-            oauth2Client.setCredentials(tokens);
-            store.set("drive_token", tokens);
-            resolve();
-          } else {
-            reject(new Error('No code found'));
-          }
-        }
-      } catch (e) {
-        reject(e);
-      }
-    }).listen(3002, () => {
-      const authUrl = tempClient.generateAuthUrl({
-        access_type: 'offline',
-        scope: ['https://www.googleapis.com/auth/drive.file'],
-      });
-      
-      shell.openExternal(authUrl);
-      
-      // Since it's in the system browser, we don't know if the user closed the window.
-      // The local server will just wait until it times out or succeeds.
-    }).on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        reject(new Error('Auth server is already running. Please close the existing authentication window and try again.'));
-      } else {
-        reject(err);
-      }
-    });
-  });
-}
-
-ipcMain.handle("drive:auth", async () => {
-  try {
-    await authenticate();
-    return true;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
-});
-
-
-let pickerServer: http.Server | null = null;
 
 
 ipcMain.handle("drive:pick", async () => {
-  let accessToken = store.get("drive_token")?.access_token;
-  try {
-    const res = await oauth2Client.getAccessToken();
-    if (res?.token) {
-      accessToken = res.token;
-    }
-  } catch (e) {
-    console.warn("Failed to get fresh access token, using stored", e);
-  }
-
   return new Promise((resolve, reject) => {
-    if (pickerServer) {
-      pickerServer.close();
+    let timeoutId = setTimeout(() => {
+      if (currentServer) {
+        currentServer.close();
+        currentServer = null;
+      }
+      resolve(null); // Timeout
+    }, 5 * 60 * 1000); // 5 minutes timeout
+
+    if (currentServer) {
+      currentServer.close();
+      currentServer = null;
     }
 
+    const randomState = crypto.randomBytes(16).toString('hex');
 
-    
-    if (!accessToken) {
-      resolve(null);
-      return;
-    }
-    
-    pickerServer = http.createServer((req, res) => {
-      const parsedUrl = url.parse(req.url || '', true);
-      
-      if (parsedUrl.pathname === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Select from Google Drive</title>
-            <script src="https://apis.google.com/js/api.js"></script>
-            <script>
-              const accessToken = "${accessToken}";
-              const developerKey = "${process.env.GOOGLE_API_KEY || ''}";
-              const appId = "${(process.env.GOOGLE_CLIENT_ID || '').split('-')[0]}";
-              
-              function onApiLoad() {
-                gapi.load('picker', { 'callback': onPickerApiLoad });
-              }
-              
+    currentServer = http.createServer(async (req, res) => {
+      clearTimeout(timeoutId);
 
-              function onPickerApiLoad() {
-                const view = new google.picker.View(google.picker.ViewId.SPREADSHEETS);
-                let pickerBuilder = new google.picker.PickerBuilder()
-                  .addView(view)
-                  .setOAuthToken(accessToken);
-                  
-                if (developerKey) {
-                  pickerBuilder = pickerBuilder.setDeveloperKey(developerKey);
-                }
-                if (appId) {
-                  pickerBuilder = pickerBuilder.setAppId(appId);
-                }
+      try {
+        const reqUrl = url.parse(req.url || '', true);
+        if (reqUrl.pathname === '/oauth2callback') {
+          const code = reqUrl.query.code as string;
+          const pickedFileIds = reqUrl.query.picked_file_ids as string;
+          const error = reqUrl.query.error as string;
+          const returnedState = reqUrl.query.state as string;
+
+          if (returnedState !== randomState) {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end(`<h2>Error: Invalid State</h2><p>CSRF verification failed.</p>`);
+            resolve(null);
+            if (currentServer) {
+              currentServer.close();
+              currentServer = null;
+            }
+            return;
+          }
+
+          if (error) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h2>Error: ${error}</h2><p>You can close this window.</p>`);
+            resolve(null);
+          } else if (pickedFileIds) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h2>File selected successfully!</h2><p>You can close this window and return to Event Tracker.</p>`);
+            resolve({ id: pickedFileIds.split(',')[0], name: 'Selected File' });
+          } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h2>Authentication successful, but no file selected.</h2><p>You can close this window.</p>`);
+            resolve(null);
+          }
+
+          if (code) {
+             try {
+                const port = (currentServer?.address() as any).port;
+                const tempClient = new google.auth.OAuth2(
+                  process.env.GOOGLE_CLIENT_ID,
+                  process.env.GOOGLE_CLIENT_SECRET,
+                  `http://127.0.0.1:${port}/oauth2callback`
+                );
+                const { tokens } = await tempClient.getToken(code);
                 
-                const picker = pickerBuilder.setCallback(pickerCallback).build();
-                picker.setVisible(true);
-              }
-
-              
-              function pickerCallback(data) {
-                if (data.action == google.picker.Action.PICKED) {
-                  const doc = data.docs[0];
-                  fetch('/callback?fileId=' + encodeURIComponent(doc.id) + '&name=' + encodeURIComponent(doc.name))
-                    .then(() => {
-                      document.body.innerHTML = '<h2>File selected! You can close this tab and return to the application.</h2>';
-                    });
-                } else if (data.action == google.picker.Action.CANCEL) {
-                  fetch('/callback?cancel=true').then(() => {
-                    document.body.innerHTML = '<h2>Selection cancelled. You can close this tab and return to the application.</h2>';
-                  });
-                }
-              }
-            </script>
-            <style>
-              body { font-family: sans-serif; text-align: center; padding: 50px; }
-            </style>
-          </head>
-          <body onload="onApiLoad()">
-            <h2>Opening Google Picker...</h2>
-          </body>
-          </html>
-        `);
-      } else if (parsedUrl.pathname === '/callback') {
-        const fileId = parsedUrl.query.fileId as string;
-        const name = parsedUrl.query.name as string;
-        const cancel = parsedUrl.query.cancel;
-        
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('OK');
-        
-        pickerServer?.close();
-        pickerServer = null;
-        
-        if (fileId) {
-          resolve({ id: fileId, name: name });
+                const existing = store.get("drive_token") || {};
+                const newTokens = { ...existing, ...tokens };
+                store.set("drive_token", newTokens);
+             } catch(e) {
+                console.error("Token exchange failed:", e);
+             }
+          }
+          
+          if (currentServer) {
+            currentServer.close();
+            currentServer = null;
+          }
         } else {
-          resolve(null);
+          res.writeHead(404);
+          res.end();
         }
-      } else {
-        res.writeHead(404);
-        res.end();
+      } catch (e) {
+        res.writeHead(500);
+        res.end("Internal Server Error");
+        resolve(null);
       }
     });
-    
-    pickerServer.listen(3003, () => {
-      shell.openExternal('http://localhost:3003');
+
+currentServer.listen(0, '127.0.0.1', () => {
+      const port = (currentServer?.address() as any).port;
+      const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
+      
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        reject(new Error("Google OAuth configuration error: GOOGLE_CLIENT_ID is missing"));
+        if (currentServer) {
+          currentServer.close();
+          currentServer = null;
+        }
+        return;
+      }
+
+      const authUrlObj = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrlObj.searchParams.set("client_id", clientId);
+      authUrlObj.searchParams.set("redirect_uri", redirectUri);
+      authUrlObj.searchParams.set("response_type", "code");
+      authUrlObj.searchParams.set("scope", "https://www.googleapis.com/auth/drive.file");
+      authUrlObj.searchParams.set("access_type", "offline");
+      authUrlObj.searchParams.set("state", randomState);
+      authUrlObj.searchParams.set("trigger_onepick", "true");
+
+      const finalUrl = authUrlObj.toString();
+      
+      console.log(`[Google OAuth]`);
+      console.log(`clientId configured: ${Boolean(clientId)}`);
+      console.log(`clientId prefix: ${clientId.substring(0, 20)}`);
+      console.log(`redirectUri: ${redirectUri}`);
+      console.log(`scope: https://www.googleapis.com/auth/drive.file`);
+      
+      shell.openExternal(finalUrl);
     }).on('error', (err: any) => {
-      console.error('Picker server error', err);
+      console.error('Callback server error', err);
       resolve(null);
     });
   });
@@ -220,13 +159,30 @@ ipcMain.handle("drive:pick", async () => {
 
 ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => {
   try {
+    const tokens = store.get("drive_token");
+    if (!tokens) {
+      console.error("No tokens found for drive:download");
+      return null;
+    }
+    
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials(tokens);
+
+    oauth2Client.on('tokens', (newTokens) => {
+      const existing = store.get("drive_token") || {};
+      store.set("drive_token", { ...existing, ...newTokens });
+    });
+
     const drive = google.drive({ version: "v3", auth: oauth2Client });
     
     // Check if it's a google sheet
     const fileInfo = await drive.files.get({ fileId, fields: 'mimeType' });
     const isGoogleSheet = fileInfo.data.mimeType === 'application/vnd.google-apps.spreadsheet';
     
-    const tempPath = path.join(os.tmpdir(), `${Date.now()}-${fileName}.xlsx`);
+    const tempPath = path.join(os.tmpdir(), `${Date.now()}-${fileName}`);
     const dest = createWriteStream(tempPath);
     
     if (isGoogleSheet) {
@@ -254,8 +210,7 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
     }
     return tempPath;
   } catch (e) {
-    console.error(e);
+    console.error("Drive download error:", e);
     return null;
   }
 });
-

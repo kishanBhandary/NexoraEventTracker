@@ -108,21 +108,16 @@ export function SpreadsheetImportCard({
     await loadPreview(chosenFile);
   };
 
-    const openDrivePicker = async () => {
+      const openDrivePicker = async () => {
     if (!api?.drive) {
       setMessage("Drive API is not available.");
       return;
     }
     setLoadingDrive(true);
     try {
-      const authed = await api.drive.auth();
-      if (!authed) {
-        setMessage("Google Drive authentication failed.");
-        return;
-      }
       const picked = await api.drive.pick();
       if (picked && picked.id) {
-        await downloadDriveFile(picked.id, picked.name || "Google_Drive_File.xlsx");
+        await downloadDriveFile(picked.id, "Google_Drive_File.xlsx");
       }
     } catch (e: any) {
       setMessage(e.message || "Error accessing Google Drive.");
