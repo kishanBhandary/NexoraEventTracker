@@ -130,7 +130,12 @@ ipcMain.handle("drive:pick", async () => {
                    throw new Error(`Token exchange failed: ${await tokenRes.text()}`);
                 }
                 
-                const tokens = await tokenRes.json();
+                const tokens: any = await tokenRes.json();
+                
+                if (tokens.expires_in) {
+                  tokens.expiry_date = Date.now() + tokens.expires_in * 1000;
+                  delete tokens.expires_in;
+                }
                 
                 const existing = store.get("drive_token") || {};
                 const newTokens = { ...existing, ...(tokens as any) };
@@ -198,11 +203,9 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
   try {
     const tokens = store.get("drive_token");
     if (!tokens) {
-      console.error("No tokens found for drive:download");
-      return null;
+      throw new Error("No tokens found. Please log in again.");
     }
     
-    // We only need the client ID. The client secret is intentionally omitted.
     const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
     oauth2Client.setCredentials(tokens);
 
@@ -213,7 +216,7 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
 
     const drive = google.drive({ version: "v3", auth: oauth2Client });
     
-    const fileInfo = await drive.files.get({ fileId, fields: 'mimeType' });
+    const fileInfo = await drive.files.get({ fileId, fields: 'mimeType', supportsAllDrives: true });
     const isGoogleSheet = fileInfo.data.mimeType === 'application/vnd.google-apps.spreadsheet';
     
     const tempPath = path.join(os.tmpdir(), `${Date.now()}-${fileName}`);
@@ -232,7 +235,7 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
       });
     } else {
       const res = await drive.files.get(
-        { fileId, alt: 'media' },
+        { fileId, alt: 'media', supportsAllDrives: true },
         { responseType: 'stream' }
       );
       await new Promise((resolve, reject) => {
@@ -243,8 +246,8 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
       });
     }
     return tempPath;
-  } catch (e) {
+  } catch (e: any) {
     console.error("Drive download error:", e);
-    return null;
+    throw new Error(e.message || String(e));
   }
 });
