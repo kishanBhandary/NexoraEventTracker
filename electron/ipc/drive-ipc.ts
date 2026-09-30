@@ -15,15 +15,25 @@ const envPath = app.isPackaged
 
 const envResult = dotenv.config({ path: envPath });
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+let GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+let GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+const oauthJsonPath = path.join(__dirname, '../oauth.json');
+if (fs.existsSync(oauthJsonPath)) {
+  try {
+    const oauthConfig = JSON.parse(fs.readFileSync(oauthJsonPath, 'utf8'));
+    if (oauthConfig.GOOGLE_CLIENT_ID) GOOGLE_CLIENT_ID = oauthConfig.GOOGLE_CLIENT_ID;
+    if (oauthConfig.GOOGLE_CLIENT_SECRET) GOOGLE_CLIENT_SECRET = oauthConfig.GOOGLE_CLIENT_SECRET;
+    console.log("[Google OAuth] Successfully loaded configuration from internal oauth.json");
+  } catch (e) {
+    console.error("Failed to parse oauth.json", e);
+  }
+}
 
 if (!GOOGLE_CLIENT_ID) {
   console.error("[Google OAuth] CRITICAL ERROR: GOOGLE_CLIENT_ID is missing!");
   console.error("Attempted to load .env from:", envPath);
-  if (envResult.error) {
-    console.error("dotenv error:", envResult.error);
-  }
+  console.error("Attempted to load config from:", oauthJsonPath);
 }
 
 const store = new Store() as any;
@@ -89,8 +99,8 @@ ipcMain.handle("drive:pick", async () => {
              try {
                 const port = (currentServer?.address() as any).port;
                 const tempClient = new google.auth.OAuth2(
-                  process.env.GOOGLE_CLIENT_ID,
-                  process.env.GOOGLE_CLIENT_SECRET,
+                  GOOGLE_CLIENT_ID,
+                  GOOGLE_CLIENT_SECRET,
                   `http://127.0.0.1:${port}/oauth2callback`
                 );
                 const { tokens } = await tempClient.getToken(code);
@@ -122,7 +132,7 @@ currentServer.listen(0, '127.0.0.1', () => {
       const port = (currentServer?.address() as any).port;
       const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
       
-      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientId = GOOGLE_CLIENT_ID;
       if (!clientId) {
         reject(new Error("Google OAuth configuration error: GOOGLE_CLIENT_ID is missing"));
         if (currentServer) {
@@ -166,8 +176,8 @@ ipcMain.handle("drive:download", async (_, fileId: string, fileName: string) => 
     }
     
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET
     );
     oauth2Client.setCredentials(tokens);
 
