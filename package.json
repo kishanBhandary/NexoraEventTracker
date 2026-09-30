@@ -1,6 +1,6 @@
 {
   "name": "event-tracker",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "dev:next": "next dev -p 3001",
     "dev:electron": "wait-on tcp:3001 && npm run build:electron && cross-env ELECTRON_IS_DEV=true electron dist-electron/main.js",
     "build": "next build && npm run build:electron",
-    "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('dotenv').config(); require('fs').writeFileSync('dist-electron/oauth.json', JSON.stringify({ GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET }))\"",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('dotenv').config(); require('fs').writeFileSync('dist-electron/oauth-config.json', JSON.stringify({ GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID }))\"",
     "start": "next start -p 3001",
     "electron": "npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
     "desktop": "npm run build && cross-env ELECTRON_DISABLE_GPU=1 electron dist-electron/main.js",
